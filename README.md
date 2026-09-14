@@ -7,7 +7,7 @@ Dashboard perso pour piloter la recherche d'emploi (dev web/mobile, télétravai
 - Suivi de candidature (à postuler / postulé / relancé / entretien / refusé / offre reçue).
 - Le bouton **Postuler** ouvre simplement l'offre dans un nouvel onglet — la candidature reste toujours envoyée manuellement par toi.
 
-Stack : Next.js 16 (App Router) + Prisma (SQLite) + Tailwind CSS. SQLite a été choisi pour ne dépendre d'aucun service de base de données externe : un simple fichier suffit, ce qui simplifie beaucoup le déploiement sur de l'hébergement mutualisé.
+Stack : Next.js 16 (App Router) + Prisma (MySQL, via le driver `mariadb` pur JS) + Tailwind CSS. SQLite a été essayé en premier mais abandonné : son binding natif (`better-sqlite3`) ne peut pas se compiler sur l'hébergement mutualisé Hostinger (pas de Python/toolchain disponible dans l'environnement restreint). Le driver `mariadb` est 100% JavaScript, aucune compilation requise, et MySQL est un service de première classe sur ce type d'hébergement.
 
 ## Développement local
 
@@ -18,24 +18,34 @@ npm run dev
 ```
 
 Configure `.env` (copie de `.env.example`) avec :
+- `DATABASE_URL` — chaîne de connexion MySQL, ex. `mysql://user:password@localhost:3306/dbname`
 - `ADMIN_PASSWORD` — mot de passe de connexion au dashboard
 - `SESSION_SECRET` — chaîne aléatoire longue
 - `INGEST_TOKEN` — jeton que la tâche planifiée utilisera pour pousser les offres
 
-## Déploiement sur Hostinger (plan Business Web Hosting, Node.js)
+## Déploiement sur Hostinger (plan Business Web Hosting)
 
-1. **Créer l'application Node.js** dans hPanel → *Avancé* → *Node.js*. Choisis une version récente de Node (20 ou +), et le dossier de l'application (ex. `job-search-platform`).
-2. **Envoyer le code** : soit via Git (hPanel propose un déploiement Git — connecte un repo GitHub/GitLab où tu auras poussé ce dossier), soit via le gestionnaire de fichiers / SFTP.
-3. **Variables d'environnement** : dans l'écran de l'app, ajoute `ADMIN_PASSWORD`, `SESSION_SECRET`, `INGEST_TOKEN`, et `DATABASE_URL=file:/home/u575974999/appdata/emploi/prod.db` — un chemin **en dehors** du dossier déployé, pour que la base survive aux redéploiements Git.
-4. **Installer et builder** (hPanel propose un bouton "npm install" / "Run script", sinon en SSH) :
+Le sous-domaine `emploi.acralya.com` et le dépôt GitHub sont déjà connectés via hPanel → *Avancé* → *GIT* (déploiement automatique à chaque push sur `main`). Attention : cette synchronisation Git ne fait que copier les fichiers — elle ne lance ni `npm install`, ni le build, ni le serveur. Il faut en plus :
+
+1. **Créer une base MySQL** : hPanel → *Bases de données* → *Bases de données MySQL* → créer une nouvelle base + un utilisateur avec tous les privilèges dessus. Hostinger préfixe automatiquement les noms (ex. `u575974999_emploi`). Note le nom de la base, l'utilisateur et le mot de passe généré.
+2. **Créer l'app Node.js (Passenger)** pour que le site tourne réellement : cherche "Node" dans la barre de recherche de hPanel (l'option n'est pas toujours visible dans le menu *Avancé*) → *Créer une application* :
+   - Version Node : **22**
+   - Racine de l'application : `domains/acralya.com/public_html/emploi`
+   - Domaine : `emploi.acralya.com`
+   - Fichier de démarrage : `server.js`
+   - Variables d'environnement : `DATABASE_URL`, `ADMIN_PASSWORD`, `SESSION_SECRET`, `INGEST_TOKEN`
+3. **Installer, migrer et builder** (en SSH, avec Node 22 activé) :
    ```bash
+   source /opt/alt/alt-nodejs22/enable
+   cd ~/domains/acralya.com/public_html/emploi
    npm install
    npx prisma migrate deploy
    npm run build
    ```
-5. **Démarrage** : la commande de démarrage de l'app Node.js Hostinger doit être `npm start` (= `next start`), sur le port que Hostinger t'assigne (il l'injecte via `PORT`).
-6. **Fichier SQLite persistant** : `/home/u575974999/appdata/emploi/` a déjà été créé sur le serveur pour héberger `prod.db`, en dehors du dossier synchronisé par Git — il survivra aux futurs déploiements. Après le tout premier déploiement, lance `npx prisma migrate deploy` (en SSH, dans le dossier de l'app) pour créer les tables dans ce fichier.
-7. Une fois le domaine actif (ex. `https://tondomaine.com`), va sur `/login` et connecte-toi avec `ADMIN_PASSWORD`.
+4. Redémarre l'application depuis l'écran Node.js de hPanel.
+5. Va sur `https://emploi.acralya.com/login` et connecte-toi avec `ADMIN_PASSWORD`.
+
+À chaque futur `git push`, hPanel resynchronise les fichiers automatiquement, mais un `npm install` / `npx prisma migrate deploy` / `npm run build` + redémarrage restent nécessaires après si les dépendances ou le schéma ont changé.
 
 ## Brancher la recherche quotidienne (routine cloud)
 

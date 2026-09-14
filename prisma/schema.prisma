@@ -7,12 +7,11 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
 }
 
 // Status is a plain string (validated in app code via zod) rather than a
-// native enum so the schema stays portable between sqlite (dev) and mysql
-// (Hostinger prod) without touching the model.
+// native enum, kept intentionally simple for this single-table personal app.
 // Values: a_postuler | postule | relance | entretien | refuse | offre
 
 model Job {
@@ -23,13 +22,13 @@ model Job {
   remoteType        String?
   salaryMin         Int?
   salaryMax         Int?
-  stack             String?
-  url               String    @unique
+  stack             String?   @db.Text
+  url               String    @unique @db.VarChar(768)
   source            String?
   postedAt          DateTime?
-  description       String?
+  description       String?   @db.Text
   status            String    @default("a_postuler")
-  notes             String?
+  notes             String?   @db.Text
   cvGeneratedAt     DateTime?
   letterGeneratedAt DateTime?
   appliedAt         DateTime?
