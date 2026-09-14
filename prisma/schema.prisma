@@ -1,0 +1,41 @@
+// Prisma schema for the personal job-search dashboard.
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Status is a plain string (validated in app code via zod) rather than a
+// native enum so the schema stays portable between sqlite (dev) and mysql
+// (Hostinger prod) without touching the model.
+// Values: a_postuler | postule | relance | entretien | refuse | offre
+
+model Job {
+  id                String    @id @default(cuid())
+  title             String
+  company           String
+  location          String?
+  remoteType        String?
+  salaryMin         Int?
+  salaryMax         Int?
+  stack             String?
+  url               String    @unique
+  source            String?
+  postedAt          DateTime?
+  description       String?
+  status            String    @default("a_postuler")
+  notes             String?
+  cvGeneratedAt     DateTime?
+  letterGeneratedAt DateTime?
+  appliedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([postedAt])
+}
